@@ -9,9 +9,11 @@ class Book {
 
 // UI Class: Handle UI Tasks
 class UI {
-  static displayBooks() {
-    const books = Store.getBooks();
-    books.forEach(book => UI.addBookToList(book))
+  static async displayBooks() {
+    const books = await Store.getBooks();
+    books[0].forEach(book => {
+      UI.addBookToList(book)
+    })
   }
 
   static addBookToList(book) {
@@ -52,31 +54,45 @@ class UI {
 
 // Store Class: Handles Storage
 class Store {
-  static getBooks() {
-    let books;
-    if(localStorage.getItem('books') === null) {
-      books = [];
-    } else {
-      books = JSON.parse(localStorage.getItem('books'));
-    }
+  static async getBooks() {
+    //GET request to add books to array for UI
+    const books = await fetch('/api/getBooks', {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+    }).then(res => res.json());
     return books;
   }
 
-  static addBook(book) {
-    const books = Store.getBooks();
-    books.push(book);
-    localStorage.setItem('books', JSON.stringify(books));
+  static async addBook(book) {
+    //POST request to add book to database
+    await fetch('/api/addBook', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title: book.title,
+        author: book.author,
+        isbn: book.isbn
+        // user_id: user_id
+      }),
+    })
+    .then(res => res.json());
   }
 
-  static removeBook(isbn) {
-    const books = Store.getBooks();
-    books.forEach((book, index) => {
-      if(book.isbn === isbn) {
-        books.splice(index, 1);
-      }
+  static async removeBook(isbn) {
+    await fetch('api/deleteBook', {
+      method: 'DELETE',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ isbn: isbn })
     })
-
-    localStorage.setItem('books', JSON.stringify(books));
   }
 }
 
@@ -85,46 +101,38 @@ class Store {
 document.addEventListener('DOMContentLoaded', UI.displayBooks);
 
 // Event: Add a Book
-document.querySelector('#book-form').addEventListener('submit', async e => {
+document.querySelector('#book-form').addEventListener('submit', e => {
   e.preventDefault();
-
+  //Get input values for title, author, and isbn
   const title = document.querySelector('#title').value;
   const author = document.querySelector('#author').value;
   const isbn = document.querySelector('#isbn').value;
   
+  //Validate user input
   if (title === '' || author === '' || isbn === '') {
     UI.showAlert('Please fill in all fields', 'danger')
   } else {
-    const addBookRes = await fetch(`/api/addBook/`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        title: title,
-        author: author,
-        isbn: isbn
-        // user_id: user_id
-      }),
-    })
-    .then(res => res.json());
     
-    console.log(addBookRes);
-    if(addBookRes.title && addBookRes.author) {
+  
       const book = new Book(title, author, isbn)
+
+      //Add book to table in UI
       UI.addBookToList(book);
-      Store.addBook(book);
+
+      //Add book to database
+      const newBook = Store.addBook(book);  
+
+      if(newBook) {
+      //Show success alert
       UI.showAlert('Book added', 'success');
+
+      //Clear input fields
       UI.clearFields();
-    } else {
+
+      } else {
       UI.showAlert('An error occurred', 'danger');
-    }
+      }
   }
-
-
-
-
 });
 
 //Event: Remove a Book
@@ -137,4 +145,4 @@ document.querySelector('#book-list').addEventListener('click', (e) => {
 
   //Show success alert
   UI.showAlert('Book removed', 'success');
-})
+});
